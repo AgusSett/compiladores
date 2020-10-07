@@ -19,11 +19,13 @@ module MonadPCF (
   runPCF,
   lookupDecl,
   lookupTy,
+  lookupTySyn,
   printPCF,
   failPosPCF,
   failPCF,
   addDecl,
   addTy,
+  addTySyn,
   catchErrors,
   MonadPCF,
   module Control.Monad.Except,
@@ -64,6 +66,9 @@ addDecl d = modify (\s -> s { glb = d : glb s })
 addTy :: MonadPCF m => Name -> Ty -> m ()
 addTy n ty = modify (\s -> s { tyEnv = (n,ty) : tyEnv s })
 
+addTySyn :: MonadPCF m => Name -> Ty -> m ()
+addTySyn n ty = modify (\s -> s { tySyn = (n,ty) : tySyn s })
+
 hasName :: Name -> Decl a -> Bool
 hasName nm (Decl { declName = nm' }) = nm == nm'
 
@@ -78,6 +83,11 @@ lookupTy :: MonadPCF m => Name -> m (Maybe Ty)
 lookupTy nm = do
       s <- get
       return $ lookup nm (tyEnv s)
+
+lookupTySyn :: MonadPCF m => Name -> m (Maybe Ty)
+lookupTySyn nm = do
+      s <- get
+      return $ lookup nm (tySyn s)
 
 failPosPCF :: MonadPCF m => Pos -> String -> m a
 failPosPCF p s = throwError (ErrPos p s)

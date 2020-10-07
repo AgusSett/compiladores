@@ -36,7 +36,7 @@ data UnaryOp = Succ | Pred
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a =
-    Decl { declPos :: Pos, declName :: Name, declBody :: a }
+    Decl { declPos :: Pos, declName :: Name, declTy :: Ty, declBody :: a }
   deriving (Show,Functor)
 
 -- | AST de los términos. 
@@ -81,3 +81,31 @@ freeVars (UnaryOp _ _ t)   = freeVars t
 freeVars (Fix _ _ _ _ _ t) = freeVars t
 freeVars (IfZ _ c t e)     = freeVars c ++ freeVars t ++ freeVars e
 freeVars (Const _ _)       = []
+
+data STy = 
+      SNatTy 
+    | SFunTy STy STy
+    | SSynTy Name
+    deriving (Show)
+
+-- | AST superficial. 
+--   - info es información extra que puede llevar cada nodo. 
+data STm info =
+    SV info Name
+  | SConst info Const
+  | SLam info [(Name, STy)] (STm info)
+  | SApp info (STm info) (STm info)
+  | SUnaryOp info UnaryOp (Maybe (STm info))
+  | SFix info Name STy [(Name, STy)] (STm info)
+  | SIfZ info (STm info) (STm info) (STm info)
+  | SLet info Name STy [(Name, STy)] (STm info) (STm info)
+  | SLetRec info Name STy [(Name, STy)] (STm info) (STm info)
+  deriving (Show)
+
+type STerm = STm Pos
+
+data SDecl =
+    SDeclTm Pos Name STy [(Name, STy)] STerm
+  | SDeclRec Pos Name STy [(Name, STy)] STerm
+  | SDeclSyn Pos Name STy
+  deriving (Show)

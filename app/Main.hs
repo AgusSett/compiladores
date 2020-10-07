@@ -27,7 +27,7 @@ import Global ( GlEnv(..) )
 import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
-import Elab ( elab )
+import Elab ( elab, desugar, foldTy, desugarTy )
 import Eval ( eval )
 import PPrint ( pp , ppTy )
 import MonadPCF
@@ -75,19 +75,33 @@ compileFile f = do
                          hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
                          return "")
     decls <- parseIO filename program x
-    mapM_ handleDecl decls
+    mapM_ desugarDecl decls
 
 parseIO ::  MonadPCF m => String -> P a -> String -> m a
 parseIO filename p x = case runP p x filename of
                   Left e  -> throwError (ParseErr e)
                   Right r -> return r
 
-handleDecl ::  MonadPCF m => Decl NTerm -> m ()
-handleDecl (Decl p x t) = do
+handleDecl :: MonadPCF m => Decl NTerm -> m ()
+handleDecl (Decl p x ty t) = do
         let tt = elab t
-        tcDecl (Decl p x tt)    
+        tcDecl (Decl p x ty tt)    
         te <- eval tt
-        addDecl (Decl p x te)
+        addDecl (Decl p x ty te)
+
+desugarDecl :: MonadPCF m => SDecl -> m ()
+desugarDecl (SDeclSyn p n ty)       = do mty <- lookupTySyn n
+                                         case mty of
+                                           Nothing -> do tty <- desugarTy ty
+                                                         addTySyn n tty
+                                           Just _  -> failPosPCF p $ n ++" ya está declarado"
+desugarDecl (SDeclTm p n ty xs t)   = do tt <- desugar (SLam p xs t)
+                                         tty <- desugarTy (foldTy xs ty)
+                                         handleDecl (Decl p n tty tt)
+desugarDecl (SDeclRec p f fty xs t) = do let fty' = (foldTy xs fty)
+                                         tt <- desugar (SFix p f fty' xs t)
+                                         tfty <- desugarTy fty'
+                                         handleDecl (Decl p f tfty tt)
 
 data Command = Compile CompileForm
              | Print String
@@ -166,12 +180,13 @@ compilePhrase x =
   do
     dot <- parseIO "<interactive>" declOrTm x
     case dot of 
-      Left d  -> handleDecl d
+      Left d  -> desugarDecl d
       Right t -> handleTerm t
 
-handleTerm ::  MonadPCF m => NTerm -> m ()
+handleTerm ::  MonadPCF m => STerm -> m ()
 handleTerm t = do
-         let tt = elab t
+         t' <- desugar t
+         let tt = elab t'
          s <- get
          ty <- tc tt (tyEnv s)
          te <- eval tt
@@ -181,9 +196,10 @@ printPhrase   :: MonadPCF m => String -> m ()
 printPhrase x =
   do
     x' <- parseIO "<interactive>" tm x
-    let ex = elab x'
+    x'' <- desugar x'
+    let ex = elab x''
     t  <- case x' of 
-           (V p f) -> maybe ex id <$> lookupDecl f
+           (SV p f) -> maybe ex id <$> lookupDecl f
            _       -> return ex  
     printPCF "NTerm:"
     printPCF (show x')
@@ -193,7 +209,8 @@ printPhrase x =
 typeCheckPhrase :: MonadPCF m => String -> m ()
 typeCheckPhrase x = do
          t <- parseIO "<interactive>" tm x
-         let tt = elab t
+         t' <- desugar t
+         let tt = elab t'
          s <- get
          ty <- tc tt (tyEnv s)
          printPCF (ppTy ty)

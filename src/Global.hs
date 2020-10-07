@@ -15,9 +15,10 @@ data GlEnv = GlEnv {
   inter :: Bool,        --  ^ True, si estamos en modo interactivo.
   lfile :: String,      -- ^ Último archivo cargado.
   glb :: [Decl Term],   -- ^ Entorno con declaraciones globales
-  tyEnv :: [(Name,Ty)]  -- ^ Entorno de tipado de declaraciones globales
+  tyEnv :: [(Name,Ty)],  -- ^ Entorno de tipado de declaraciones globales
+  tySyn :: [(Name,Ty)]  -- ^ Entorno de sinonimos de tipos globales
 }
 
 -- | Valor del estado inicial
 initialEnv :: GlEnv
-initialEnv = GlEnv True "" [] []
+initialEnv = GlEnv True "" [] [] []
