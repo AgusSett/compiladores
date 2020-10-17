@@ -32,6 +32,7 @@ import Eval ( eval )
 import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
+import CEK ( evalCEK )
 
 prompt :: String
 prompt = "PCF> "
@@ -86,7 +87,7 @@ handleDecl :: MonadPCF m => Decl NTerm -> m ()
 handleDecl (Decl p x ty t) = do
         let tt = elab t
         tcDecl (Decl p x ty tt)    
-        te <- eval tt
+        te <- evalCEK tt
         addDecl (Decl p x ty te)
 
 desugarDecl :: MonadPCF m => SDecl -> m ()
@@ -189,7 +190,7 @@ handleTerm t = do
          let tt = elab t'
          s <- get
          ty <- tc tt (tyEnv s)
-         te <- eval tt
+         te <- evalCEK tt
          printPCF (pp te ++ " : " ++ ppTy ty)
 
 printPhrase   :: MonadPCF m => String -> m ()
