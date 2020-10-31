@@ -26,7 +26,8 @@ elab (Lam p v ty t)        = Lam p v ty (close v (elab t))
 elab (App p h a)           = App p (elab h) (elab a)
 elab (Fix p f fty x xty t) = Fix p f fty x xty (closeN [f, x] (elab t))
 elab (IfZ p c t e)         = IfZ p (elab c) (elab t) (elab e)
-elab (UnaryOp i o t)       = UnaryOp i o (elab t)
+elab (BinaryOp i o a b)    = BinaryOp i o (elab a) (elab b)
+elab (Let p v ty t t')     = Let p v ty (elab t) (close v (elab t')) -- TODO
 
 elab_decl :: Decl NTerm -> Decl Term
 elab_decl = fmap elab
@@ -41,16 +42,21 @@ desugar (SApp p h a)                        = App p <$> desugar h <*> desugar a
 desugar (SFix p f fty [(x, xty)] t)         = Fix p f <$> desugarTy fty <*> return x <*> desugarTy xty <*> desugar t
 desugar (SFix p f fty ((x, ty):xs) t)       = desugar (SFix p f fty [(x, ty)] (SLam p xs t))
 desugar (SIfZ p c t e)                      = IfZ p <$> desugar c <*> desugar t <*> desugar e
-desugar (SUnaryOp i o (Just t))             = UnaryOp i o <$> desugar t
-desugar (SUnaryOp i o Nothing)              = return (Lam i "x" NatTy (UnaryOp i o (V i "x")))
+desugar (SBinaryOp i o a b)                 = BinaryOp i o <$> desugar a <*> desugar b
+desugar (SUnaryOp i o (Just t))             = BinaryOp i (mapOp o) <$> desugar t <*> return (Const i (CNat 1))
+desugar (SUnaryOp i o Nothing)              = return (Lam i "x" NatTy (BinaryOp i (mapOp o) (V i "x") (Const i (CNat 1))))
 desugar (SLet p v ty [] t t')               = do tty <- desugarTy ty
                                                  tt <- desugar t
                                                  tt' <- desugar t'
-                                                 return (App p (Lam p v tty tt') tt)
+                                                 return (Let p v tty tt tt')
 desugar (SLet p v ty xs t t')               = desugar (SLet p v (foldTy xs ty) [] (SLam p xs t) t')
 desugar (SLetRec p v ty [] t t')            = failPosPCF p $ "Se requiere un argumento como minimo: " ++ v
 desugar (SLetRec p v ty [(x, xty)] t t')    = desugar (SLet p v (SFunTy xty ty) [] (SFix p v (SFunTy xty ty) [(x, xty)] t) t')
 desugar (SLetRec p v ty ((x, xty):xs) t t') = desugar (SLetRec p v (foldTy xs ty) [(x, xty)] (SLam p xs t) t')
+
+mapOp :: UnaryOp -> BinaryOp
+mapOp Succ = Plus
+mapOp Pred = Minus
 
 foldTy :: [(Name, STy)] -> STy -> STy
 foldTy xs xty = foldr (\(_, ty) ty' -> SFunTy ty ty') xty xs

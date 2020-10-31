@@ -30,9 +30,11 @@ tc (V p (Free n)) bs = case lookup n bs of
                            Nothing -> failPosPCF p $ "Variable no declarada "++ppName n
                            Just ty -> return ty 
 tc (Const _ (CNat n)) _ = return NatTy
-tc (UnaryOp p u t) bs = do 
-      ty <- tc t bs
-      expect NatTy ty t
+tc (BinaryOp p u a b) bs = do 
+      aty <- tc a bs
+      bty <- tc b bs
+      expect NatTy aty a
+      expect NatTy bty b
 tc (IfZ p c t t') bs = do
        tyc  <- tc c bs
        expect NatTy tyc c

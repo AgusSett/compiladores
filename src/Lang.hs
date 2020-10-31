@@ -34,6 +34,9 @@ data Const = CNat Int
 data UnaryOp = Succ | Pred
   deriving Show
 
+data BinaryOp = Plus | Minus
+  deriving Show
+
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a =
     Decl { declPos :: Pos, declName :: Name, declTy :: Ty, declBody :: a }
@@ -48,9 +51,10 @@ data Tm info var =
   | Const info Const
   | Lam info Name Ty (Tm info var)
   | App info (Tm info var) (Tm info var)
-  | UnaryOp info UnaryOp (Tm info var)
+  | BinaryOp info BinaryOp (Tm info var) (Tm info var)
   | Fix info Name Ty Name Ty (Tm info var)
   | IfZ info (Tm info var) (Tm info var) (Tm info var)
+  | Let info Name Ty (Tm info var) (Tm info var)
   deriving (Show, Functor)
 
 type NTerm = Tm Pos Name   -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
@@ -67,7 +71,7 @@ getInfo (V i _) = i
 getInfo (Const i _) = i
 getInfo (Lam i _ _ _) = i
 getInfo (App i _ _ ) = i
-getInfo (UnaryOp i _ _) = i
+getInfo (BinaryOp i _ _ _) = i
 getInfo (Fix i _ _ _ _ _) = i
 getInfo (IfZ i _ _ _) = i
 
@@ -77,7 +81,7 @@ freeVars (V _ (Free v))    = [v]
 freeVars (V _ _)           = []
 freeVars (Lam _ _ _ t)     = freeVars t
 freeVars (App _ l r)       = freeVars l ++ freeVars r
-freeVars (UnaryOp _ _ t)   = freeVars t
+freeVars (BinaryOp _ _ a b) = freeVars a ++ freeVars b
 freeVars (Fix _ _ _ _ _ t) = freeVars t
 freeVars (IfZ _ c t e)     = freeVars c ++ freeVars t ++ freeVars e
 freeVars (Const _ _)       = []
@@ -96,6 +100,7 @@ data STm info =
   | SLam info [(Name, STy)] (STm info)
   | SApp info (STm info) (STm info)
   | SUnaryOp info UnaryOp (Maybe (STm info))
+  | SBinaryOp info BinaryOp (STm info) (STm info)
   | SFix info Name STy [(Name, STy)] (STm info)
   | SIfZ info (STm info) (STm info) (STm info)
   | SLet info Name STy [(Name, STy)] (STm info) (STm info)

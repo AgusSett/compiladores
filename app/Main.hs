@@ -22,6 +22,7 @@ import Data.Char ( isSpace )
 import Control.Exception ( catch , IOException )
 import System.Environment ( getArgs )
 import System.IO ( stderr, hPutStr )
+import Options.Applicative
 
 import Global ( GlEnv(..) )
 import Errors
@@ -33,15 +34,59 @@ import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
+import Bytecompile ( Bytecode, bcRead, bcWrite, runBC, bytecompileModule )
 
 prompt :: String
 prompt = "PCF> "
 
 main :: IO ()
-main = do args <- getArgs
-          runPCF (runInputT defaultSettings (main' args))
-          return ()
-          
+main = execParser opts >>= go
+    where
+        opts = info (parseArgs <**> helper) 
+            ( fullDesc <> progDesc "Compilador de PCF" <> header "Compilador de PCF de la materia Compiladores 2020" )
+        go :: (Mode, [FilePath]) -> IO ()
+        go (Interactive, files) =
+            do runPCF (runInputT defaultSettings (main' files))
+               return ()
+        go (Typecheck, files) =
+            do runPCF $ catchErrors (mapM_ typecheck files)
+               return ()
+        go (Bytecompile, files) =
+            do runPCF $ catchErrors (mapM_ bytecompile files)
+               return ()
+        go (Run, files) =
+            do bc <- mapM bcRead files
+               runPCF $ catchErrors (mapM runBC bc)
+               return ()
+
+readf :: MonadPCF m => String -> m String
+readf filename = liftIO $ catch (readFile filename)
+                        (\e -> do let err = show (e :: IOException)
+                                  hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
+                                  return "")
+
+typecheck :: MonadPCF m => String -> m ()
+typecheck file = 
+  do let filename = reverse(dropWhile isSpace (reverse file)) 
+     x <- readf filename
+     p <- parseIO filename program x
+     sdecls <- mapM desugarDecl2 p
+     let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
+     mapM tcDecl decls
+     return ()
+
+bytecompile :: MonadPCF m => String -> m ()
+bytecompile file =
+  do let filename = reverse(dropWhile isSpace (reverse file)) 
+     x <- readf filename
+     p <- parseIO filename program x
+     sdecls <- mapM desugarDecl2 p
+     let decls = [Decl p x ty t | Just (Decl p x ty t) <- sdecls]
+     bc <- bytecompileModule decls
+     printPCF (show bc)
+     liftIO $ bcWrite bc (filename ++ ".bc")
+     return ()
+
 main' :: (MonadPCF m, MonadMask m) => [String] -> InputT m ()
 main' args = do
         lift $ catchErrors $ compileFiles args
@@ -59,6 +104,23 @@ main' args = do
                        c <- liftIO $ interpretCommand x
                        b <- lift $ catchErrors $ handleCommand c
                        maybe loop (flip when loop) b
+
+data Mode = Interactive
+          | Typecheck
+          | Bytecompile
+          | Run
+
+-- | Parser de banderas
+parseMode :: Parser Mode
+parseMode =
+        flag' Typecheck ( long "typecheck" <> short 't' <> help "Solo chequear tipos")
+    <|> flag' Bytecompile (long "bytecompile" <> short 'c' <> help "Compilar a la BVM")
+    <|> flag' Run (long "run" <> short 'r' <> help "Ejecutar bytecode en la BVM")
+    <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva" )
+
+-- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
+parseArgs :: Parser (Mode, [FilePath])
+parseArgs = (,) <$> parseMode <*> many (argument str (metavar "FILES..."))
  
 compileFiles ::  MonadPCF m => [String] -> m ()
 compileFiles []     = return ()
@@ -86,7 +148,7 @@ parseIO filename p x = case runP p x filename of
 handleDecl :: MonadPCF m => Decl NTerm -> m ()
 handleDecl (Decl p x ty t) = do
         let tt = elab t
-        tcDecl (Decl p x ty tt)    
+        tcDecl (Decl p x ty tt)
         te <- evalCEK tt
         addDecl (Decl p x ty te)
 
@@ -103,6 +165,21 @@ desugarDecl (SDeclRec p f fty xs t) = do let fty' = (foldTy xs fty)
                                          tt <- desugar (SFix p f fty' xs t)
                                          tfty <- desugarTy fty'
                                          handleDecl (Decl p f tfty tt)
+
+desugarDecl2 :: MonadPCF m => SDecl -> m (Maybe (Decl NTerm))
+desugarDecl2 (SDeclSyn p n ty)       = do mty <- lookupTySyn n
+                                          case mty of
+                                             Nothing -> do tty <- desugarTy ty
+                                                           addTySyn n tty
+                                             Just _  -> failPosPCF p $ n ++" ya está declarado"
+                                          return Nothing
+desugarDecl2 (SDeclTm p n ty xs t)   = do tt <- desugar (SLam p xs t)
+                                          tty <- desugarTy (foldTy xs ty)
+                                          return (Just (Decl p n tty tt))
+desugarDecl2 (SDeclRec p f fty xs t) = do let fty' = (foldTy xs fty)
+                                          tt <- desugar (SFix p f fty' xs t)
+                                          tfty <- desugarTy fty'
+                                          return (Just (Decl p f tfty tt))
 
 data Command = Compile CompileForm
              | Print String

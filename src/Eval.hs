@@ -37,16 +37,13 @@ eval (App p l r) = do
         _ ->
            abort("Error de tipo en runtime " ++ show (le, re))
 
-eval (UnaryOp p Succ t) = do
-        te <- eval t
-        case te of
-          Const _ (CNat n) -> return (Const p (CNat (n+1)))
-          _                -> abort ("Error de tipo en runtime!")
-eval (UnaryOp p Pred t) = do
-        te <- eval t
-        case te of
-          Const _ (CNat n) -> return (Const p (CNat (max 0 (n-1))))
-          _                -> abort ("Error de tipo en runtime!")
+eval (BinaryOp p o a b) = do
+        ae <- eval a
+        be <- eval b
+        case (ae, be) of
+          (Const _ (CNat n), Const _ (CNat m)) -> return (Const p (CNat (mapOp o n m)))
+          (_, _)               -> abort ("Error de tipo en runtime!")
+
 eval (IfZ p c t e) = do
      ce <- eval c
      case ce of
@@ -56,3 +53,7 @@ eval (IfZ p c t e) = do
 
 -- nada más para reducir
 eval t = return t
+
+mapOp :: BinaryOp -> (Int -> Int -> Int)
+mapOp Plus = (+)
+mapOp Minus = (-)
