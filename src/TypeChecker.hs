@@ -59,6 +59,10 @@ tc (Fix p f fty x xty t) bs = do
          ty' <- tc t' ((x,xty):(f,fty):bs)
          expect cod ty' t'
          return fty
+tc (Let p x ty t t') bs = do -- TODO
+      tty <- tc t bs
+      expect ty tty t
+      tc (open x t') ((x,ty):bs)
 
 
 -- | @'typeError' t s@ lanza un error de tipo para el término @t@ 
