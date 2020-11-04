@@ -72,13 +72,13 @@ destroy v ((KClos (ClosFix p f fty x ty t)):k) = search t (v:(VClos (ClosFix p f
 destroy v k = failPCF $ "Error de ejecución en destroy: " ++ show v ++ " " ++ show k
 
 valToTerm :: Val -> Term
-valToTerm (VConst (CNat n)) = Const NoPos (CNat n)
-valToTerm (VClos (ClosFun p x ty t)) = substN (map valToTerm p) (Lam NoPos x ty t)
-valToTerm (VClos (ClosFix p f fty x ty t)) = substN (map valToTerm p) (Fix NoPos f fty x ty t)
+valToTerm (VConst (CNat n))                = Const NoPos (CNat n)
+valToTerm (VClos (ClosFun p x ty t))       = substN (reverse (map valToTerm p)) (Lam NoPos x ty t)
+valToTerm (VClos (ClosFix p f fty x ty t)) = substN (reverse (map valToTerm p)) (Fix NoPos f fty x ty t)
 
 mapOp :: BinaryOp -> (Int -> Int -> Int)
 mapOp Plus = (+)
-mapOp Minus = (-)
+mapOp Minus = \x y -> max 0 (x - y)
 
 evalCEK :: MonadPCF m => Term -> m Term
 evalCEK t = valToTerm <$> search t [] []
