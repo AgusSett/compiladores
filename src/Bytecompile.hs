@@ -88,7 +88,7 @@ bc (V _ (Free nm))    = do
   -- unfold and keep going
   mtm <- lookupDecl nm 
   case mtm of 
-    Nothing -> failPCF $ "Error de ejecución: variable no declarada: " ++ nm 
+    Nothing -> failPCF $ "Error de compilación: variable no declarada: " ++ nm 
     Just t -> bc t
 bc (Const _ (CNat n)) = return [CONST, n]
 bc (Lam _ _ _ t)      = do cf <- tc t
