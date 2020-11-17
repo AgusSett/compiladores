@@ -130,12 +130,6 @@ ifz = do i <- getPos
          e <- tm
          return (SIfZ i c t e)
 
-math :: P STerm
-math = do i <- getPos
-          chainl1 tm
-            ((reservedOp "+" >> return (SBinaryOp i Plus)) <|>
-             (reservedOp "-" >> return (SBinaryOp i Minus)))
-
 binding :: P (Name, STy)
 binding = do v <- var
              reservedOp ":"
@@ -177,7 +171,7 @@ letTm = do i <- getPos
              Just _  -> return (SLetRec i f ty binds t t')
 
 -- | Parser de términos
-tm :: P STerm -- TODO: precedencia de la suma?
+tm :: P STerm
 tm = chainl1 (app <|> lam <|> ifz <|> unaryOp <|> fix <|> letTm)
              ((reservedOp "+" >> return (SBinaryOp NoPos Plus)) <|>
               (reservedOp "-" >> return (SBinaryOp NoPos Minus)))

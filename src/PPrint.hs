@@ -100,7 +100,7 @@ t2doc at (V _ x) = pretty x
 t2doc at (Const _ c) = c2doc c
 t2doc at (Lam _ v ty t) =
   parenIf at $
-  sep [sep [annotate (color Red) (pretty "fun"), parens (sep [name2doc v,pretty ":",ty2doc ty]), annotate (color Red) (pretty "->")], nest 2 (t2doc False t)]
+  sep [sep [annotate (color Red) (pretty "λ"), parens (sep [name2doc v,pretty ":",ty2doc ty]), annotate (color Red) (pretty "->")], nest 2 (t2doc False t)]
 
 t2doc at t@(App _ _ _) =
   let (h, ts) = collectApp t in

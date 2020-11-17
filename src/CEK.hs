@@ -30,8 +30,9 @@ data Fr =
     KArg Env Term 
   | KIf Env Term Term 
   | KClos Clos
-  | KBinaryL BinaryOp Env Term -- TODO
+  | KBinaryL BinaryOp Env Term
   | KBinaryR BinaryOp Const
+  | KLet Env Term
   deriving ( Show )
 
 type Env = [Val]
@@ -42,8 +43,7 @@ search (BinaryOp _ o a b) p k = search a p ((KBinaryL o p b):k)
 --search (UnaryOp _ Succ t) p k = search t p (KSucc:k)
 search (IfZ _ c t e) p k = search c p ((KIf p t e):k)
 search (App _ t u) p k = search t p ((KArg p u):k)
-
-search (Let i x ty t t') p k = search (App i (Lam i x ty t') t) p k
+search (Let i x ty t t') p k = search t p ((KLet p t'):k) -- TODO
 
 search (V _ (Bound x)) p k = destroy (p!!x) k
 search (V _ (Free nm)) p k = do
@@ -69,6 +69,7 @@ destroy (VConst (CNat _)) ((KIf p t e):k) = search e p k
 destroy (VClos clos) ((KArg p t):k) = search t p ((KClos clos):k)
 destroy v ((KClos (ClosFun p _ _ t)):k) = search t (v:p) k
 destroy v ((KClos (ClosFix p f fty x ty t)):k) = search t (v:(VClos (ClosFix p f fty x ty t)):p) k
+destroy v ((KLet p t):k) = search t (v:p) k -- TODO
 destroy v k = failPCF $ "Error de ejecución en destroy: " ++ show v ++ " " ++ show k
 
 valToTerm :: Val -> Term

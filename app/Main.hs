@@ -28,7 +28,7 @@ import Global ( GlEnv(..) )
 import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
-import Elab ( elab, desugar, foldTy, desugarTy )
+import Elab ( elab, elab_decl, desugar, foldTy, desugarTy )
 import Eval ( eval )
 import PPrint ( pp , ppTy )
 import MonadPCF
@@ -81,7 +81,8 @@ bytecompile file =
      x <- readf filename
      p <- parseIO filename program x
      sdecls <- mapM desugarDecl2 p
-     let decls = [Decl p x ty t | Just (Decl p x ty t) <- sdecls]
+     let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
+     mapM tcDecl decls
      bc <- bytecompileModule decls
      printPCF (show bc)
      liftIO $ bcWrite bc (filename ++ ".bc")

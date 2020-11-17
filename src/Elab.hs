@@ -27,7 +27,7 @@ elab (App p h a)           = App p (elab h) (elab a)
 elab (Fix p f fty x xty t) = Fix p f fty x xty (closeN [f, x] (elab t))
 elab (IfZ p c t e)         = IfZ p (elab c) (elab t) (elab e)
 elab (BinaryOp i o a b)    = BinaryOp i o (elab a) (elab b)
-elab (Let p v ty t t')     = Let p v ty (elab t) (close v (elab t')) -- TODO
+elab (Let p v ty t t')     = Let p v ty (elab t) (close v (elab t'))
 
 elab_decl :: Decl NTerm -> Decl Term
 elab_decl = fmap elab

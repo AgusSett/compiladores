@@ -29,7 +29,7 @@ type Bytecode = [Int]
 
 newtype Bytecode32 = BC { un32 :: [Word32] }
 
-type Module = [Decl NTerm]
+type Module = [Decl Term]
 type Env = [Val]
 data Val = I Int 
          | Fun Env Bytecode
@@ -123,13 +123,13 @@ tc (IfZ _ c t e) = do cc <- bc c
 tc t           = (++) <$> bc t <*> return [RETURN]
 
 bytecompileModule :: MonadPCF m => Module -> m Bytecode
-bytecompileModule mod = do let tp = elab (foldLet mod) -- TODO: elab aca?
+bytecompileModule mod = do let tp = foldLet mod
                            btc <- bc tp
                            return (btc ++ [PRINT, STOP])
 
-foldLet :: [Decl NTerm] -> NTerm
+foldLet :: [Decl Term] -> Term
 foldLet [d]    = (declBody d)
-foldLet (d:xs) = Let (declPos d) (declName d) (declTy d) (declBody d) (foldLet xs)
+foldLet (d:xs) = Let (declPos d) (declName d) (declTy d) (declBody d) (close (declName d) (foldLet xs))
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo 
 bcWrite :: Bytecode -> FilePath -> IO ()

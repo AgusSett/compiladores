@@ -59,7 +59,7 @@ tc (Fix p f fty x xty t) bs = do
          ty' <- tc t' ((x,xty):(f,fty):bs)
          expect cod ty' t'
          return fty
-tc (Let p x ty t t') bs = do -- TODO
+tc (Let p x ty t t') bs = do
       tty <- tc t bs
       expect ty tty t
       tc (open x t') ((x,ty):bs)
