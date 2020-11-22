@@ -35,6 +35,7 @@ import MonadPCF
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
 import Bytecompile ( Bytecode, bcRead, bcWrite, runBC, bytecompileModule )
+import Closure ( runCC )
 
 prompt :: String
 prompt = "PCF> "
@@ -57,6 +58,9 @@ main = execParser opts >>= go
         go (Run, files) =
             do bc <- mapM bcRead files
                runPCF $ catchErrors (mapM runBC bc)
+               return ()
+        go (ClosConvert, files) =
+            do runPCF $ catchErrors (mapM_ closConvert files)
                return ()
 
 readf :: MonadPCF m => String -> m String
@@ -88,6 +92,17 @@ bytecompile file =
      liftIO $ bcWrite bc (filename ++ ".bc")
      return ()
 
+closConvert :: MonadPCF m => String -> m ()
+closConvert file =
+  do let filename = reverse(dropWhile isSpace (reverse file)) 
+     x <- readf filename
+     p <- parseIO filename program x
+     sdecls <- mapM desugarDecl2 p
+     let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
+     mapM tcDecl decls
+     mapM (printPCF . show) (runCC decls)
+     return ()
+
 main' :: (MonadPCF m, MonadMask m) => [String] -> InputT m ()
 main' args = do
         lift $ catchErrors $ compileFiles args
@@ -110,6 +125,7 @@ data Mode = Interactive
           | Typecheck
           | Bytecompile
           | Run
+          | ClosConvert
 
 -- | Parser de banderas
 parseMode :: Parser Mode
@@ -117,6 +133,7 @@ parseMode =
         flag' Typecheck ( long "typecheck" <> short 't' <> help "Solo chequear tipos")
     <|> flag' Bytecompile (long "bytecompile" <> short 'c' <> help "Compilar a la BVM")
     <|> flag' Run (long "run" <> short 'r' <> help "Ejecutar bytecode en la BVM")
+    <|> flag' ClosConvert (long "cconvert" <> short 'C' <> help "Convertir a clausuras")
     <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva" )
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
