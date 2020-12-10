@@ -7,7 +7,7 @@ import Control.Monad.State
 import Control.Monad.Writer
 
 data IrDecl = IrVal Name Ir
-            | IrFun Name Ir
+            | IrFun Name [Name] Ir
             deriving ( Show )
 
 data Ir = IrVar Name
@@ -20,6 +20,12 @@ data Ir = IrVar Name
         | IrAccess Ir Int
         deriving ( Show )
 
+freeVars' :: Term -> [Name]
+freeVars' t = filter (isPrefixOf "__") (freeVars t)
+
+foldLet :: [Name] -> Name -> Ir -> Ir
+foldLet vars clo t = foldr (\(n, i) x -> IrLet n (IrAccess (IrVar clo) i) x) t (zip vars [1..])
+
 closureConvert :: Term -> StateT Int (Writer [IrDecl]) Ir
 closureConvert (V _ (Free n))       = return (IrVar n)
 closureConvert (Const _ c)          = return (IrConst c)
@@ -27,20 +33,20 @@ closureConvert (Lam _ v _ t)        =
     do  n <- fresh ""
         v' <- fresh v
         clo <- fresh "clo"
-        let vars = filter (isPrefixOf "__") (freeVars t)
+        let vars = freeVars' t
         t' <- closureConvert (open v' t)
-        let free = foldr (\(n, i) x -> IrLet n (IrAccess (IrVar clo) i) x) t' (zip vars [1..])
-        tell [IrFun n free]
+        let free = foldLet vars clo t'
+        tell [IrFun n [clo, v'] free]
         return (MkClosure n (map IrVar vars))
 closureConvert (Fix _ f _ x _ t) = 
     do  n <- fresh ""
         x' <- fresh x
         f' <- fresh f
         clo <- fresh "clo"
-        let vars = filter (isPrefixOf "__") (freeVars t)
+        let vars = freeVars' t
         t' <- closureConvert (openN [f', x'] t)
-        let free = foldr (\(n, i) x -> IrLet n (IrAccess (IrVar clo) i) x) t' (zip (vars) [1..])
-        tell [IrFun n (IrLet f' (IrVar clo) free)]
+        let free = foldLet vars clo t'
+        tell [IrFun n [clo, x'] (IrLet f' (IrVar clo) free)]
         return (MkClosure n (map IrVar vars))
 closureConvert (App _ (V _ (Free n)) a) =
     do a' <- closureConvert a
