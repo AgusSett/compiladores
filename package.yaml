@@ -32,6 +32,8 @@ dependencies:
 - prettyprinter
 - prettyprinter-ansi-terminal
 - text
+- llvm-hs-pure
+- llvm-hs-pretty
 
 library:
   source-dirs: src
