@@ -1,8 +1,10 @@
 module CIR where
 
-import Lang ( BinaryOp, Name, UnaryOp, Const ( CNat ) )
-import Data.List (intercalate)
-import Closure
+import Lang ( BinaryOp(Plus),  Name, UnaryOp, Const ( CNat ) )
+import Data.List ( intercalate, isPrefixOf )
+import Closure hiding ( fresh )
+import Control.Monad.State
+import Control.Monad.Writer
 
 newtype Reg = Temp String
   deriving Show
@@ -63,35 +65,102 @@ instance Show CanonProg where
     pr1 (Right v) =
       "declare " ++ v ++ "\n\n"
 
-{-
+
 runCanon :: [IrDecl] -> CanonProg
-runCanon xs = CanonProg (map canonDecl xs)
+runCanon xs = CanonProg $ map canonDecl xs ++ [Left (pcfmain xs)]
+
+fr :: Monad m => String -> StateT (Int, Loc, [Inst]) m Name
+fr n = do (g, l, xs) <- get
+          put (g+1, l, xs)
+          return (n ++ show g)
+
+inst :: Monad m => Inst -> StateT (Int, Loc, [Inst]) m ()
+inst x = modify (\(n, l, xs) -> (n, l, xs ++ [x]))
+
+pushBlock :: Monad m => Loc -> StateT (Int, Loc, [Inst]) m ()
+pushBlock l = modify (\(n, _, xs) -> (n, l, xs))
+
+popBlock :: Terminator -> StateT (Int, Loc, [Inst]) (Writer Blocks) ()
+popBlock t = do (n, l, xs) <- get
+                tell [(l, xs, t)]
+                put (n, "", [])
+
+fresh :: Monad m => String -> StateT (Int, Loc, [Inst]) m Name
+fresh n = 
+    do (g, l, xs) <- get
+       put (g+1, l, xs)
+       return (n ++ show g)
 
 canonDecl :: IrDecl -> Either CanonFun CanonVal
 canonDecl (IrVal x t) = Right x
-canonDecl (IrFun f args t) = Left (f, args, canon t)
+canonDecl (IrFun f args t) = Left (f, args, execWriter $ evalStateT (canon t >>= exprToVal >>= (popBlock . Return)) (0, "entry", []))
 
-canonVal :: Ir -> Val
-canonVal (IrVar n) | isPrefixOf "__" n = R (Temp n)
-canonVal (IrVar n) | otherwise         = G n
-canonVal (IrConst (CNat n))            = C n 
+exprToVal :: Expr -> StateT (Int, Loc, [Inst]) (Writer Blocks) Val
+exprToVal (V (R r)) = return (R r)
+exprToVal (V (G n)) = return (G n)
+exprToVal (V (C n)) = return (C n)
+exprToVal e = 
+  do r <- Temp <$> fresh "r"
+     inst $ Assign r e
+     return (R r)
+
+canon :: Ir -> StateT (Int, Loc, [Inst]) (Writer Blocks) Expr
+canon (IrVar n) | isPrefixOf "__" n = return $ V (R (Temp n))
+canon (IrVar n)                     = return $ V (G n)
+canon (IrConst (CNat n))            = return $ V (C n)
+canon (IrBinaryOp o a b) =
+  do a' <- canon a >>= exprToVal
+     b' <- canon b >>= exprToVal
+     return (BinOp o a' b')
+
+canon (IrAccess v i) =
+  do v' <- canon v >>= exprToVal
+     return (Access v' i)
+
+canon (IrLet x t t') =
+  do a <- canon t
+     inst $ Assign (Temp x) a
+     canon t'
+
+canon (Closure.MkClosure n args) =
+  do args' <- mapM (canon >=> exprToVal) args
+     return (CIR.MkClosure n args')
+
+canon (IrCall f args) =
+  do f' <- canon f >>= exprToVal
+     args' <- mapM (canon >=> exprToVal) args
+     return (Call f' args')
+
+canon (IrIfZ c a b) =
+  do c' <- canon c >>= exprToVal
+     left <- fresh "then"
+     right <- fresh "else"
+     cont <- fresh "cont"
+     popBlock (CondJump (Eq c' (C 0)) left right)
+
+     pushBlock left
+     a' <- canon a
+     ra <- Temp <$> fresh "r"
+     inst $ Assign ra a'
+     popBlock (Jump cont)
+
+     pushBlock right
+     b' <- canon b
+     rb <- Temp <$> fresh "r"
+     inst $ Assign rb b'
+     popBlock (Jump cont)
+
+     pushBlock cont
+     return (Phi [(left, R ra), (right, R rb)])
 
 
-canon :: Ir -> [Inst]
-canon (IrVar n)          = V (canonVal (IrVar n))
-canon (IrConst (CNat n)) = V (canonVal (IrConst (CNat n)))
+pcfmain :: [IrDecl] -> CanonFun
+pcfmain decls = ("pcfmain", [], execWriter $ evalStateT (storeVals decls >>= (popBlock . Return)) (0, "entry", []))
 
-canon (IrCall f args) = let args' = map canonVal args
-                        in Call (canonVal f) 
-canon (IrAccess v i) = Access (canonVal v) i
-canon (IrBinaryOp o a b) = [
-  Assign (Temp "t1") Expr,
-  Assign (Temp "t3") (BinOp o (R (Temp "t1")) (R (Temp "t2")))
-]
-canon IrLet x t t' = Assign 
-canon IrIfZ Ir Ir Ir
-canon MkClosure Name [Ir]
--}
-
---pcfmain :: CanonFun
---pcfmain = ("pcfmain", [], [("pcfmain", [Store "var" x, ...], Return (V (C 0)))])
+storeVals :: [IrDecl] -> StateT (Int, Loc, [Inst]) (Writer Blocks) Val
+storeVals [] = return (C 0)
+storeVals (IrVal x t : xs) = 
+  do t' <- canon t
+     inst (Store x t')
+     storeVals xs
+storeVals (_:xs) = storeVals xs

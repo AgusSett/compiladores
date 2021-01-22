@@ -1,6 +1,6 @@
 module InstSel where
 
-import CIR
+import CIR hiding ( fresh )
 import Data.String
 import Control.Monad.Writer
 import Control.Monad.State
