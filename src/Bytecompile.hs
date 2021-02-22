@@ -149,15 +149,15 @@ runBC c = run c [] []
 run :: MonadPCF m => Bytecode -> Env -> Env -> m ()
 run (STOP:_) _ _                 = return ()
 run (CONST:n:c) e s              = run c e ((I n):s)
-run (MINUS:c) e ((I n):(I m):s)  = run c e ((I (max 0 (n-m))):s)
+run (MINUS:c) e ((I n):(I m):s)  = run c e ((I (max 0 (m-n))):s)
 run (PLUS:c) e ((I n):(I m):s)   = run c e ((I (n+m)):s)
 run (ACCESS:i:c) e s             = run c e ((e!!i):s)
 run (CALL:c) e (v:(Fun ef cf):s) = run cf (v:ef) ((RA e c):s)
 run (TAILCALL:_) _ (v:(Fun ef cf):s) = run cf (v:ef) s
-run (FUNCTION:n:c) e s           = run (drop n c) e ((Fun e (take n c)):s)
+run (FUNCTION:n:c) e s           = run (drop n c) e ((Fun e c):s)
 run (RETURN:_) _ (v:(RA e c):s)  = run c e (v:s)
 run (PRINT:c) e ((I n):s)        = printPCF (show n) >> run c e ((I n):s)
-run (FIX:c) e ((Fun ef cf):s)    = let fix = (Fun fix cf):ef in run c e ((Fun fix cf):s)
+run (FIX:c) e ((Fun ef cf):s)    = let fix = Fun fix cf : ef in run c e (Fun fix cf :s)
 run (SHIFT:c) e (v:s)            = run c (v:e) s
 run (DROP:c) (v:e) s             = run c e s
 run (JUMP:n:c) e s               = run (drop n c) e s
