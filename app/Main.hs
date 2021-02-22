@@ -36,6 +36,14 @@ import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
 import Bytecompile ( Bytecode, bcRead, bcWrite, runBC, bytecompileModule )
 import Closure ( runCC )
+import CIR ( runCanon )
+import InstSel ( codegen )
+import LLVM.Pretty (ppllvm)
+import qualified Data.Text.Lazy.IO as TIO
+import GCC
+import Optimize ( optimize )
+import GCC ( ppC )
+import Data.Text.Lazy (pack)
 
 prompt :: String
 prompt = "PCF> "
@@ -61,6 +69,12 @@ main = execParser opts >>= go
                return ()
         go (ClosConvert, files) =
             do runPCF $ catchErrors (mapM_ closConvert files)
+               return ()
+        go (GCC, files) =
+            do runPCF $ catchErrors (mapM_ gcc files)
+               return ()
+        go (CompileLLVM b, files) =
+            do runPCF $ catchErrors (mapM_ (compile b) files)
                return ()
 
 readf :: MonadPCF m => String -> m String
@@ -100,8 +114,32 @@ closConvert file =
      sdecls <- mapM desugarDecl2 p
      let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
      mapM tcDecl decls
-     mapM (printPCF . show) (runCC decls)
-     return ()
+     mapM_ (printPCF . show) (runCC decls)
+
+compile :: MonadPCF m => Bool -> String -> m ()
+compile opt file =
+  do let filename = reverse(dropWhile isSpace (reverse file)) 
+     x <- readf filename
+     p <- parseIO filename program x
+     sdecls <- mapM desugarDecl2 p
+     let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
+     mapM tcDecl decls
+     mapM addDecl decls
+     optimized <- if opt then optimize decls else return decls
+     mapM (printPCF . (\x -> declName x ++ " = " ++ (pp . declBody) x)) optimized
+     let canon = runCanon (runCC optimized)
+     liftIO $ TIO.writeFile "output.ll" (ppllvm (codegen canon))
+
+gcc :: MonadPCF m => String -> m ()
+gcc file =
+  do let filename = reverse(dropWhile isSpace (reverse file)) 
+     x <- readf filename
+     p <- parseIO filename program x
+     sdecls <- mapM desugarDecl2 p
+     let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
+     mapM tcDecl decls
+     let clos = runCC decls
+     liftIO $ TIO.writeFile "output.c" (pack (ppC clos))
 
 main' :: (MonadPCF m, MonadMask m) => [String] -> InputT m ()
 main' args = do
@@ -126,6 +164,8 @@ data Mode = Interactive
           | Bytecompile
           | Run
           | ClosConvert
+          | GCC
+          | CompileLLVM Bool
 
 -- | Parser de banderas
 parseMode :: Parser Mode
@@ -135,6 +175,9 @@ parseMode =
     <|> flag' Run (long "run" <> short 'r' <> help "Ejecutar bytecode en la BVM")
     <|> flag' ClosConvert (long "cconvert" <> short 'C' <> help "Convertir a clausuras")
     <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva" )
+    <|> flag' GCC (long "gcc" <> short 'g' <> help "Convertir a codigo C")
+    <|> flag' CompileLLVM (long "compile" <> short 'X' <> help "Compilar a binario")
+    <*> switch ( long "opt" <> short 'O' <> help "Aplicar optimizaciones" )
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
 parseArgs :: Parser (Mode, [FilePath])
