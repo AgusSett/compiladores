@@ -22,6 +22,7 @@ data Inst =
 data Expr =
     BinOp BinaryOp Val Val
   | UnOp UnaryOp Val
+  | Print Val
   | Phi [(Loc, Val)]
   | Call Val [Val]
   | MkClosure Loc [Val]
@@ -142,25 +143,34 @@ canon (IrIfZ c a b) =
      a' <- canon a
      ra <- Temp <$> fresh "r"
      inst $ Assign ra a'
+
+     (_, fromLeft, _) <- get
      popBlock (Jump cont)
 
      pushBlock right
      b' <- canon b
      rb <- Temp <$> fresh "r"
      inst $ Assign rb b'
+
+     (_, fromRight, _) <- get
      popBlock (Jump cont)
 
      pushBlock cont
-     return (Phi [(left, R ra), (right, R rb)])
+     return (Phi [(fromLeft, R ra), (fromRight, R rb)])
 
 
 pcfmain :: [IrDecl] -> CanonFun
-pcfmain decls = ("pcfmain", [], execWriter $ evalStateT (storeVals decls >>= (popBlock . Return)) (0, "entry", []))
+pcfmain decls = ("pcfmain", [], execWriter $ evalStateT (storeVals vs >>= (popBlock . Return)) (0, "entry", []))
+  where vals (IrVal _ _) = True
+        vals _ = False
+        vs = filter vals decls
 
 storeVals :: [IrDecl] -> StateT (Int, Loc, [Inst]) (Writer Blocks) Val
-storeVals [] = return (C 0)
+storeVals [IrVal x t] =
+  do v <- canon t >>= exprToVal
+     inst (Store x (Print v))
+     return (C 0)
 storeVals (IrVal x t : xs) = 
   do t' <- canon t
      inst (Store x t')
      storeVals xs
-storeVals (_:xs) = storeVals xs
