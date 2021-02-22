@@ -20,8 +20,12 @@ data Ir = IrVar Name
         | IrAccess Ir Int
         deriving ( Show )
 
+uniq :: Eq a => [a] -> [a]
+uniq (x:xs) = x : uniq (filter (/= x) xs)
+uniq [] = []
+
 freeVars' :: Term -> [Name]
-freeVars' t = filter (isPrefixOf "__") (freeVars t)
+freeVars' t = uniq $ filter (isPrefixOf "__") (freeVars t)
 
 foldLet :: [Name] -> Name -> Ir -> Ir
 foldLet vars clo t = foldr (\(n, i) x -> IrLet n (IrAccess (IrVar clo) i) x) t (zip vars [1..])
