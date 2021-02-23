@@ -18,7 +18,7 @@ constFold t@(IfZ i c a b) =
     Const _ (CNat _) -> b
     _ -> t
 constFold (Lam i x ty t) = Lam i x ty (constFold t)
-constFold (App i h t) = App i h (constFold t)
+constFold (App i h t) = App i (constFold h) (constFold t)
 constFold (Fix i f fty x ty t) = Fix i f fty x ty (constFold t)
 constFold (Let i n ty t t') = Let i n ty (constFold t) (constFold t')
 constFold t = t
@@ -56,7 +56,7 @@ inlineDecl :: MonadPCF m => Decl Term -> m (Decl Term)
 inlineDecl (Decl i n ty t) = Decl i n ty <$> inline t
 
 inlineSize :: Int
-inlineSize = 5
+inlineSize = 6
 
 depth :: Term -> Int
 depth (Lam i x ty t) = 1 + depth t
