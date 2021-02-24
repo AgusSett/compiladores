@@ -12,4 +12,9 @@ app/Main
 *.blg
 *.bbl
 compiladores.cabal
-
+*.c
+*.ll
+*.out
+*.bc
+bvm
+prog
