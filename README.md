@@ -22,3 +22,16 @@ stack ghci
 
 stack ghci src/TypeChecker.hs
 ```
+
+Comandos utiles para tests
+```code
+stack run -- -c test.pcf
+stack run -- -r test.pcf.bc
+gcc bvm.c -o bvm && ./bvm test.pcf.bc
+
+stack run -- -g test.pcf
+gcc output.c runtime.c -lgc -w -o prog && ./prog
+
+stack run -- -X test.pcf -O
+clang -Wno-override-module output.ll runtime.c -lgc -o prog && ./prog 
+```

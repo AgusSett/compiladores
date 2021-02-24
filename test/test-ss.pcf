@@ -1,0 +1,37 @@
+# Definiciones locales
+let x1 : Nat = let y : Nat = 1 in y + 1
+
+# Definiciones de funciones
+let x2 : Nat = let f (y : Nat) : Nat = y + 1 in f 2
+
+# Varios argumentos
+let x3 : Nat = let f (y : Nat) (z : Nat) : Nat = y + z + 1 in f 2 3
+
+# Funciones recursivas
+let x4 : Nat = let rec f (y : Nat) (z : Nat) : Nat = ifz y then z else f y z in f 0 3
+
+# Declaracion funciones
+let f1 (x : Nat) : Nat = x + 1
+
+# Declaracion funciones multiple args
+let f2 (x : Nat) (y : Nat) : Nat = x + y
+
+# Declaracion funciones rec
+let rec f3 (x : Nat) : Nat = ifz x then 1 else f3 (x - 1)
+
+# Declaracion funciones rec multiple args
+let rec f4 (x : Nat) (y : Nat) : Nat = ifz x then y else f4 x y
+
+# Operadores unarios
+let f5 (g : Nat -> Nat) : Nat = g 3
+let x5 : Nat = f5 succ
+let x6 : Nat = f5 pred
+
+# Sinonimos de tipos
+type N = Nat
+type BinOp = N -> N -> N
+
+let f6 (x : N) (y : N) (b : BinOp) : N = b x y
+
+# Multibinders (opcional)
+let f7 (x y : Nat) (b1 b2 : Nat -> Nat -> Nat) : Nat = b2 x (b1 x y)

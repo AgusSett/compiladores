@@ -1,0 +1,52 @@
+let rec suma (m n : Nat) : Nat =
+  ifz n then m else succ (suma m (pred n))
+
+let rec resta (m n : Nat) : Nat =
+  ifz n then m else pred (resta m (pred n))
+
+let rec mult (m n : Nat) : Nat =
+  ifz n then 0 else suma m (mult m (pred n))
+
+let rec exp (m n : Nat) : Nat =
+  ifz n then 1 else mult m (exp m (pred n))
+
+let rec fact (n : Nat) : Nat =
+  ifz n then 1 else mult n (fact (n - 1))
+
+let rec div (m n : Nat) : Nat =
+  let rec div2 (m n i : Nat) : Nat =
+    ifz (mult n (i+1)) - m then div2 m n (i+1) else i 
+  in div2 m n 0
+
+type Pair = (Nat -> Nat -> Nat) -> Nat
+
+let pair (a b : Nat) : Pair =
+  fun (p : Nat -> Nat -> Nat) -> p a b
+
+let proj1 (p : Pair) : Nat = p (fun (x : Nat) (y : Nat) -> x)
+let proj2 (p : Pair) : Nat = p (fun (x : Nat) (y : Nat) -> y)
+
+type List = (Nat -> Nat -> Nat) -> Nat -> Nat
+
+let nil : List = fun (c : Nat -> Nat -> Nat) (n : Nat) -> n
+let cons (h : Nat) (t : List) : List = fun (c : Nat -> Nat -> Nat) (n : Nat) -> c h (t c n)
+
+let L : List = cons 15 (cons 2 (cons 3 nil))
+
+let length (l : List) : Nat = l (fun (h t : Nat) -> t + 1) 0
+let sum (l : List) : Nat = l (fun (h t : Nat) -> h + t) 0
+let max (l : List) : Nat = l (fun (h t : Nat) -> ifz h-t then t else h) 0
+let mean (l : List) : Nat = div (sum l) (length l)
+
+let rec gcd (m n : Nat) : Nat =
+  ifz n then m else
+  ifz m then n else
+  ifz n - m then gcd (m - n) n else gcd m (n - m)
+
+let rec R (z : Nat) (s : Nat -> Nat -> Nat) : Nat -> Nat =
+  let rec f (n : Nat) : Nat =
+    ifz n then z else s (f (n-1)) (n-1) in f
+
+let M (f : Nat -> Nat) : Nat =
+  let rec M2 (n : Nat) (f : Nat -> Nat) : Nat =
+    ifz f n then n else M2 (n+1) f in M2 0 f
