@@ -68,26 +68,8 @@ depth (Let i n ty t t')    = 1 + max (depth t) (depth t')
 depth _ = 1
 
 -- deadCode
-count :: Name -> [Name] -> [Name] 
-count n xs | n `elem` xs = xs
-           | otherwise   = n : xs
-
-ref :: Name -> State [Name] ()
-ref n = modify (count n)
-
-countRef :: Term -> State [Name] ()
-countRef (V _ (Free n)) = ref n
-countRef (V _ _)        = return ()
-countRef (Const _ _)    = return ()
-countRef (Lam _ _ _ t)  = countRef t
-countRef (App _ h t)    = countRef h >> countRef t
-countRef (IfZ _ c l r)  = countRef c >> countRef l >> countRef r
-countRef (BinaryOp _ _ a b) = countRef a >> countRef b
-countRef (Fix _ _ _ _ _ t)  = countRef t
-countRef (Let _ _ _ t t')   = countRef t >> countRef t'
-
 deadCode :: [Decl Term] -> [Name] -> [Decl Term]
-deadCode    []     _ = []
+deadCode [] _ = []
 deadCode (d@(Decl _ nm _ Lam {}) : xs) refs =
   if nm `elem` refs
     then d : deadCode xs refs
@@ -98,14 +80,17 @@ deadCode (d@(Decl _ nm _ Fix {}) : xs) refs =
     else deadCode xs refs
 deadCode (x : xs) refs = x : deadCode xs refs
 
+maxIteration :: Int
+maxIteration = 5
+
 optimize :: MonadPCF m => [Decl Term] -> m [Decl Term]
 optimize xs =
   do xs'' <- loop xs 0
-     let refs = execState (mapM (countRef . declBody) xs'') []
+     let refs = concatMap (freeVars . declBody) xs''
      return $ deadCode xs'' refs
   where loop a n = do xs' <- mapM inlineDecl a
                       let xs'' = map constFoldDecl xs'
                       modify (\s -> s { glb = [] })
                       mapM_ addDecl xs''
-                      if n < 5 then loop xs'' (n+1) else return xs''
+                      if n < maxIteration then loop xs'' (n+1) else return xs''
        

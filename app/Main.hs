@@ -88,7 +88,7 @@ typecheck file =
   do let filename = reverse(dropWhile isSpace (reverse file)) 
      x <- readf filename
      p <- parseIO filename program x
-     sdecls <- mapM desugarDecl2 p
+     sdecls <- mapM desugarDecl p
      let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
      mapM tcDecl decls
      return ()
@@ -98,7 +98,7 @@ bytecompile file =
   do let filename = reverse(dropWhile isSpace (reverse file)) 
      x <- readf filename
      p <- parseIO filename program x
-     sdecls <- mapM desugarDecl2 p
+     sdecls <- mapM desugarDecl p
      let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
      mapM tcDecl decls
      bc <- bytecompileModule decls
@@ -111,7 +111,7 @@ closConvert file =
   do let filename = reverse(dropWhile isSpace (reverse file)) 
      x <- readf filename
      p <- parseIO filename program x
-     sdecls <- mapM desugarDecl2 p
+     sdecls <- mapM desugarDecl p
      let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
      mapM tcDecl decls
      mapM_ (printPCF . show) (runCC decls)
@@ -121,7 +121,7 @@ compile opt file =
   do let filename = reverse(dropWhile isSpace (reverse file)) 
      x <- readf filename
      p <- parseIO filename program x
-     sdecls <- mapM desugarDecl2 p
+     sdecls <- mapM desugarDecl p
      let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
      mapM tcDecl decls
      mapM addDecl decls
@@ -135,7 +135,7 @@ gcc file =
   do let filename = reverse(dropWhile isSpace (reverse file)) 
      x <- readf filename
      p <- parseIO filename program x
-     sdecls <- mapM desugarDecl2 p
+     sdecls <- mapM desugarDecl p
      let decls = [Decl p x ty (elab t) | Just (Decl p x ty t) <- sdecls]
      mapM tcDecl decls
      let clos = runCC decls
@@ -199,48 +199,35 @@ compileFile f = do
                          hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
                          return "")
     decls <- parseIO filename program x
-    mapM_ desugarDecl decls
+    mapM_ (desugarDecl >=> handleDecl) decls
 
 parseIO ::  MonadPCF m => String -> P a -> String -> m a
 parseIO filename p x = case runP p x filename of
                   Left e  -> throwError (ParseErr e)
                   Right r -> return r
 
-handleDecl :: MonadPCF m => Decl NTerm -> m ()
-handleDecl (Decl p x ty t) = do
+handleDecl :: MonadPCF m => Maybe (Decl NTerm) -> m ()
+handleDecl Nothing                = return ()
+handleDecl (Just (Decl p x ty t)) = do
         let tt = elab t
         tcDecl (Decl p x ty tt)
         te <- evalCEK tt
         addDecl (Decl p x ty te)
 
-desugarDecl :: MonadPCF m => SDecl -> m ()
+desugarDecl :: MonadPCF m => SDecl -> m (Maybe (Decl NTerm))
 desugarDecl (SDeclSyn p n ty)       = do mty <- lookupTySyn n
                                          case mty of
                                            Nothing -> do tty <- desugarTy ty
                                                          addTySyn n tty
                                            Just _  -> failPosPCF p $ n ++" ya está declarado"
+                                         return Nothing
 desugarDecl (SDeclTm p n ty xs t)   = do tt <- desugar (SLam p xs t)
                                          tty <- desugarTy (foldTy xs ty)
-                                         handleDecl (Decl p n tty tt)
+                                         return (Just (Decl p n tty tt))
 desugarDecl (SDeclRec p f fty xs t) = do let fty' = (foldTy xs fty)
                                          tt <- desugar (SFix p f fty' xs t)
                                          tfty <- desugarTy fty'
-                                         handleDecl (Decl p f tfty tt)
-
-desugarDecl2 :: MonadPCF m => SDecl -> m (Maybe (Decl NTerm))
-desugarDecl2 (SDeclSyn p n ty)       = do mty <- lookupTySyn n
-                                          case mty of
-                                             Nothing -> do tty <- desugarTy ty
-                                                           addTySyn n tty
-                                             Just _  -> failPosPCF p $ n ++" ya está declarado"
-                                          return Nothing
-desugarDecl2 (SDeclTm p n ty xs t)   = do tt <- desugar (SLam p xs t)
-                                          tty <- desugarTy (foldTy xs ty)
-                                          return (Just (Decl p n tty tt))
-desugarDecl2 (SDeclRec p f fty xs t) = do let fty' = (foldTy xs fty)
-                                          tt <- desugar (SFix p f fty' xs t)
-                                          tfty <- desugarTy fty'
-                                          return (Just (Decl p f tfty tt))
+                                         return (Just (Decl p f tfty tt))
 
 data Command = Compile CompileForm
              | Print String
@@ -319,7 +306,7 @@ compilePhrase x =
   do
     dot <- parseIO "<interactive>" declOrTm x
     case dot of 
-      Left d  -> desugarDecl d
+      Left d  -> desugarDecl d >>= handleDecl
       Right t -> handleTerm t
 
 handleTerm ::  MonadPCF m => STerm -> m ()
