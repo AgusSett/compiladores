@@ -85,6 +85,7 @@ freeVars (BinaryOp _ _ a b) = freeVars a ++ freeVars b
 freeVars (Fix _ _ _ _ _ t) = freeVars t
 freeVars (IfZ _ c t e)     = freeVars c ++ freeVars t ++ freeVars e
 freeVars (Const _ _)       = []
+freeVars (Let _ _ _ t t')  = freeVars t ++ freeVars t'
 
 data STy = 
       SNatTy 

@@ -53,6 +53,9 @@ openAll (Fix p f fty x xty t) =
     Fix p f' fty x' xty (openAll t')
 openAll (IfZ p c t e) = IfZ p (openAll c) (openAll t) (openAll e)
 openAll (BinaryOp i o a b) = BinaryOp i o (openAll a) (openAll b)
+openAll (Let p n ty t t') =
+    let ([n'], t'') = openRename [n] t' in
+    Let p n' ty (openAll t) (openAll t'')
 
 -- | Pretty printer de nombres (Doc)
 name2doc :: Name -> Doc AnsiStyle

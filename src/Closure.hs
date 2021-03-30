@@ -63,7 +63,11 @@ closureConvert (App _ h a)           =
         
 closureConvert (IfZ _ c t e)         = IrIfZ <$> closureConvert c <*> closureConvert t <*> closureConvert e
 closureConvert (BinaryOp _ o a b)    = IrBinaryOp o <$> closureConvert a <*> closureConvert b
-closureConvert (Let _ v _ t t')      = IrLet v <$> closureConvert t <*> closureConvert t'
+closureConvert (Let _ v _ t t')      =
+    do  v' <- fresh v
+        t2 <- closureConvert t
+        t2' <- closureConvert (open v' t')
+        return $ IrLet v' t2 t2'
 
 fresh :: Monad m => String -> StateT Int m Name
 fresh n = 
